@@ -209,6 +209,12 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
         m_pTaskData = nullptr;
         m_waitingToConnect = false;
         return false;
+    } else if (rc == BLE_HS_EDONE) {
+        NIMBLE_LOGE(LOG_TAG, "Already connected to device; addr=%s",
+            std::string(m_peerAddress).c_str());
+        m_pTaskData = nullptr;
+        m_waitingToConnect = false;
+        return true;
     }
 
     m_waitingToConnect = true;
