@@ -164,6 +164,12 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
         return false;
     }
 
+    if(m_isConnected) {
+        NIMBLE_LOGE(LOG_TAG, "Client connected to %s, must disconnect first",
+                    std::string(m_peerAddress).c_str());
+        return false;
+    }
+
     if(address == NimBLEAddress("")) {
         NIMBLE_LOGE(LOG_TAG, "Invalid peer address;(NULL)");
         return false;
@@ -184,42 +190,29 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
      *  timeout (default value of m_connectTimeout).
      *  Loop on BLE_HS_EBUSY if the scan hasn't stopped yet.
      */
-    do{
-        rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &peerAddr_t, m_connectTimeout, &m_pConnParams,
+    do {
+        rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &peerAddr_t,
+                             m_connectTimeout, &m_pConnParams,
                              NimBLEClient::handleGapEvent, this);
         switch (rc) {
             case 0:
+                m_waitingToConnect = true;
                 break;
 
             case BLE_HS_EBUSY:
-                if(!NimBLEDevice::getScan()->stop()) {
+                if (!NimBLEDevice::getScan()->stop()) {
                     return false;
                 }
                 vTaskDelay(1 / portTICK_PERIOD_MS);
                 break;
 
-            case BLE_HS_EDONE: {
-                NIMBLE_LOGW(LOG_TAG, "Already connected to device; addr=%s",
+            case BLE_HS_EDONE:
+                NIMBLE_LOGW(LOG_TAG, "Already connected to this device; addr=%s",
                             std::string(m_peerAddress).c_str());
 
                 m_pTaskData = nullptr;
                 m_waitingToConnect = false;
-
-                ble_gap_conn_desc desc;
-                if(ble_gap_conn_find_by_addr(&peerAddr_t,&desc) != 0) {
-                    assert(0 && "Peer connected but not found!");
-                }
-
-                NimBLEClient *pClient = NimBLEDevice::getClientByID(desc.conn_handle);
-                if (pClient != nullptr) {
-                    *this = *pClient;
-                    return true;
-                } else {
-                    assert(0 && "Unable to find NimBLEClient");
-                }
-
-                break;
-            }
+                return false;
 
             default:
                 NIMBLE_LOGE(LOG_TAG, "Error: Failed to connect to device; "
@@ -231,9 +224,7 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
                 return false;
         }
 
-    } while(rc == BLE_HS_EBUSY);
-
-    m_waitingToConnect = true;
+    } while (rc == BLE_HS_EBUSY);
 
     // Wait for the connection to complete.
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);

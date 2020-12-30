@@ -144,8 +144,8 @@ void NimBLEDevice::stopAdvertising() {
 #if defined(CONFIG_BT_NIMBLE_ROLE_CENTRAL)
 /* STATIC */ NimBLEClient* NimBLEDevice::createClient(NimBLEAddress peerAddress) {
     if(m_cList.size() >= NIMBLE_MAX_CONNECTIONS) {
-        NIMBLE_LOGW("Number of clients exceeds Max connections. Max=(%d)",
-                                            NIMBLE_MAX_CONNECTIONS);
+        NIMBLE_LOGW(LOG_TAG,"Number of clients exceeds Max connections. Cur=%d Max=%d",
+                    m_cList.size(), NIMBLE_MAX_CONNECTIONS);
     }
 
     NimBLEClient* pClient = new NimBLEClient(peerAddress);
