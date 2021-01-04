@@ -167,24 +167,22 @@ void NimBLEDevice::stopAdvertising() {
 
     int rc =0;
 
-    if(pClient->m_isConnected) {
+    if(pClient->isConnected()) {
         rc = pClient->disconnect();
         if (rc != 0 && rc != BLE_HS_EALREADY && rc != BLE_HS_ENOTCONN) {
             return false;
         }
 
-        while(pClient->m_isConnected) {
-            vTaskDelay(10);
+        while(pClient->isConnected()) {
+            vTaskDelay(10 / portTICK_PERIOD_MS);
         }
-    }
-
-    if(pClient->m_waitingToConnect) {
+    } else if(pClient->m_pTaskData != nullptr) {
         rc = ble_gap_conn_cancel();
         if (rc != 0 && rc != BLE_HS_EALREADY) {
             return false;
         }
-        while(pClient->m_waitingToConnect) {
-            vTaskDelay(10);
+        while(pClient->m_pTaskData != nullptr) {
+            vTaskDelay(10 / portTICK_PERIOD_MS);
         }
     }
 
