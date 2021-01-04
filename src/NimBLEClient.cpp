@@ -99,7 +99,9 @@ NimBLEClient::~NimBLEClient() {
  * be called to reset the host in the case of a stalled controller.
  */
 void NimBLEClient::dcTimerCb(ble_npl_event *event) {
-    NIMBLE_LOGC(LOG_TAG, "Disconnect timed out - resetting host");
+    NimBLEClient *pClient = (NimBLEClient*)event->arg;
+    NIMBLE_LOGC(LOG_TAG, "Timed out disconnecting from %s - resetting host",
+                std::string(pClient->getPeerAddress()).c_str());
     ble_hs_sched_reset(BLE_HS_ECONTROLLER);
 }
 
@@ -223,17 +225,17 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
             case BLE_HS_EDONE:
                 NIMBLE_LOGE(LOG_TAG, "Already connected to device; addr=%s",
                             std::string(m_peerAddress).c_str());
-                break;
+                return false;
 
             case BLE_HS_EALREADY:
                 ble_gap_conn_cancel();
-                break;
+                return false;
 
             default:
                 NIMBLE_LOGE(LOG_TAG, "Failed to connect to %s, rc=%d; %s",
                             std::string(m_peerAddress).c_str(),
                             rc, NimBLEUtils::returnCodeToString(rc));
-                break;
+                return false;
         }
 
     } while (rc == BLE_HS_EBUSY);
@@ -742,6 +744,11 @@ uint16_t NimBLEClient::getMTU() {
     switch(event->type) {
 
         case BLE_GAP_EVENT_DISCONNECT: {
+            // If the connection id is invalid ignore this event
+            if(event->disconnect.conn.conn_handle == BLE_HS_CONN_HANDLE_NONE)
+                return 0;
+
+            // Check that the event is for this connection.
             if(client->m_conn_id != event->disconnect.conn.conn_handle)
                 return 0;
 
