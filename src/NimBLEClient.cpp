@@ -62,6 +62,7 @@ NimBLEClient::NimBLEClient(const NimBLEAddress &peerAddress) : m_peerAddress(pee
     m_connectTimeout   = 30000;
     m_deleteCallbacks  = false;
     m_pTaskData        = nullptr;
+    m_connEstablished  = false;
 
     m_pConnParams.scan_itvl = 16;          // Scan interval in 0.625ms units (NimBLE Default)
     m_pConnParams.scan_window = 16;        // Scan window in 0.625ms units (NimBLE Default)
@@ -246,7 +247,15 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
         NIMBLE_LOGE(LOG_TAG, "Connection failed; status=%d %s",
                     taskData.rc,
                     NimBLEUtils::returnCodeToString(taskData.rc));
+        // If the failure was not a result of a disconnection
+        // make sure we disconnect now to avoid dangling connections
+        if(isConnected()) {
+            disconnect();
+        }
         return false;
+    } else {
+        NIMBLE_LOGI(LOG_TAG, "Connection established");
+        m_connEstablished = true;
     }
 
     if(deleteAttibutes) {
@@ -747,21 +756,26 @@ uint16_t NimBLEClient::getMTU() {
     switch(event->type) {
 
         case BLE_GAP_EVENT_DISCONNECT: {
-            rc = event->disconnect.reason;
-            // If client is not connected check if it is waiting for a connection
-            // and release the task if needed, otherwise ignore erronous event
-            if(!client->isConnected())
-                break;
-
             // Check that the event is for this client.
             if(client->m_conn_id != event->disconnect.conn.conn_handle)
                 return 0;
+
+            client->m_conn_id = BLE_HS_CONN_HANDLE_NONE;
 
             // Stop the disconnect timer since we are now disconnected.
             ble_npl_callout_stop(&client->m_dcTimer);
 
             // Remove the device from ignore list so we will scan it again
             NimBLEDevice::removeIgnored(client->m_peerAddress);
+
+            rc = event->disconnect.reason;
+
+            // If we got a connected event but did not get established (no PDU)
+            // then a disconnect event will be sent but we should not send it to the
+            // app for processing. Instead we will ensure the task is released
+            // and report the error.
+            if(!client->m_connEstablished)
+                break;
 
             // If Host reset tell the device now before returning to prevent
             // any errors caused by calling host functions before resyncing.
@@ -779,7 +793,7 @@ uint16_t NimBLEClient::getMTU() {
                     break;
             }
 
-            client->m_conn_id = BLE_HS_CONN_HANDLE_NONE;
+            client->m_connEstablished = false;
             client->m_pClientCallbacks->onDisconnect(client);
 
             break;
@@ -795,7 +809,7 @@ uint16_t NimBLEClient::getMTU() {
 
             rc = event->connect.status;
             if (rc == 0) {
-                NIMBLE_LOGI(LOG_TAG, "Connection established");
+                NIMBLE_LOGI(LOG_TAG, "Connected event");
 
                 client->m_conn_id = event->connect.conn_handle;
 
