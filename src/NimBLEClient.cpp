@@ -217,6 +217,7 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
                 break;
 
             case BLE_HS_EBUSY:
+                // Scan was still running, stop it and try again
                 if (!NimBLEDevice::getScan()->stop()) {
                     return false;
                 }
@@ -224,11 +225,16 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
                 break;
 
             case BLE_HS_EDONE:
+                // A connection to this device already exists, do not connect twice.
                 NIMBLE_LOGE(LOG_TAG, "Already connected to device; addr=%s",
                             std::string(m_peerAddress).c_str());
                 return false;
 
             case BLE_HS_EALREADY:
+                // Already attemting to connect to this device, cancel the previous
+                // attempt and report failure here so we don't get 2 connections.
+                NIMBLE_LOGE(LOG_TAG, "Already attempting to connect to %s - cancelling",
+                            std::string(m_peerAddress).c_str());
                 ble_gap_conn_cancel();
                 return false;
 
@@ -250,7 +256,7 @@ bool NimBLEClient::connect(const NimBLEAddress &address, bool deleteAttibutes) {
         // If the failure was not a result of a disconnection
         // make sure we disconnect now to avoid dangling connections
         if(isConnected()) {
-            disconnect();
+            ble_gap_terminate(m_conn_id, BLE_ERR_REM_USER_CONN_TERM);
         }
         return false;
     } else {
@@ -747,7 +753,8 @@ uint16_t NimBLEClient::getMTU() {
  * @param [in] event The event structure sent by the NimBLE stack.
  * @param [in] arg A pointer to the client instance that registered for this callback.
  */
- /*STATIC*/ int NimBLEClient::handleGapEvent(struct ble_gap_event *event, void *arg) {
+ /*STATIC*/
+ int NimBLEClient::handleGapEvent(struct ble_gap_event *event, void *arg) {
     NimBLEClient* client = (NimBLEClient*)arg;
     int rc;
 
@@ -815,7 +822,7 @@ uint16_t NimBLEClient::getMTU() {
 
                 rc = ble_gattc_exchange_mtu(client->m_conn_id, NULL,NULL);
                 if(rc != 0) {
-                    NIMBLE_LOGE(LOG_TAG, "ble_gattc_exchange_mtu: rc=%d %s",
+                    NIMBLE_LOGE(LOG_TAG, "MTU exchange error; rc=%d %s",
                                 rc, NimBLEUtils::returnCodeToString(rc));
                     break;
                 }

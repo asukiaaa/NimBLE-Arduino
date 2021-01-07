@@ -174,7 +174,7 @@ void NimBLEDevice::stopAdvertising() {
         }
 
         while(pClient->isConnected()) {
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            vTaskDelay(1 / portTICK_PERIOD_MS);
         }
     } else if(pClient->m_pTaskData != nullptr) {
         rc = ble_gap_conn_cancel();
@@ -182,9 +182,13 @@ void NimBLEDevice::stopAdvertising() {
             return false;
         }
         while(pClient->m_pTaskData != nullptr) {
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+            vTaskDelay(1 / portTICK_PERIOD_MS);
         }
     }
+
+    // Force a task switch so the disconnect / cancel has time to process
+    // otherwise we may release a task that has been deleted.
+    vTaskDelay(1 / portTICK_PERIOD_MS);
 
     m_cList.remove(pClient);
     delete pClient;
