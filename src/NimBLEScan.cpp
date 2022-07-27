@@ -138,24 +138,30 @@ NimBLEScan::~NimBLEScan() {
                     return 0;
                 }
 
+                NIMBLE_LOGI(LOG_TAG, "advType: %d", advertisedDevice->getAdvType());
+                NIMBLE_LOGI(LOG_TAG, "event_type: %d", event_type);
                 // If not active scanning or scan response is not available
                 // or extended advertisement scanning, report the result to the callback now.
                 if(pScan->m_scan_params.passive || !isLegacyAdv ||
                   (advertisedDevice->getAdvType() != BLE_HCI_ADV_TYPE_ADV_IND &&
                    advertisedDevice->getAdvType() != BLE_HCI_ADV_TYPE_ADV_SCAN_IND))
                 {
+                    NIMBLE_LOGI(LOG_TAG, "call on result by if");
                     advertisedDevice->m_callbackSent = true;
                     pScan->m_pAdvertisedDeviceCallbacks->onResult(advertisedDevice);
 
                 // Otherwise, wait for the scan response so we can report the complete data.
                 } else if (isLegacyAdv && event_type == BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP) {
+                    NIMBLE_LOGI(LOG_TAG, "call on result by else if");
                     advertisedDevice->m_callbackSent = true;
                     pScan->m_pAdvertisedDeviceCallbacks->onResult(advertisedDevice);
                 }
                 // If not storing results and we have invoked the callback, delete the device.
                 if(pScan->m_maxResults == 0 && advertisedDevice->m_callbackSent) {
+                    NIMBLE_LOGI(LOG_TAG, "erase");
                     pScan->erase(advertisedAddress);
                 }
+                NIMBLE_LOGI(LOG_TAG, "end if");
             }
 
             return 0;
